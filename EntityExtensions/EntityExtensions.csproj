@@ -58,6 +58,8 @@
     <None Include="App.config">
       <SubType>Designer</SubType>
     </None>
+    <None Include="Packages\EntityExtensions.1.0.0.nupkg" />
+    <None Include="EntityExtensions.nuspec" />
     <None Include="packages.config">
       <SubType>Designer</SubType>
     </None>

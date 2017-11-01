@@ -6,7 +6,7 @@ using System.Runtime.InteropServices;
 // set of attributes. Change these attribute values to modify the information
 // associated with an assembly.
 [assembly: AssemblyTitle("EntityExtensions")]
-[assembly: AssemblyDescription("")]
+[assembly: AssemblyDescription("Entity Framework extenstions library (Bulk processing and Meta helpers)")]
 [assembly: AssemblyConfiguration("")]
 [assembly: AssemblyCompany("")]
 [assembly: AssemblyProduct("EntityExtensions")]
