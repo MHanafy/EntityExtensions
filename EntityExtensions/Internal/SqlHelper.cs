@@ -89,7 +89,7 @@ namespace EntityExtensions.Internal
 
         public static string GetDeleteSql(this DbContext context, string srcTable, string destTable, List<string> keys)
         {
-            StringBuilder sb = new StringBuilder();
+            var sb = new StringBuilder();
             sb.Append("Delete from ");
             sb.AppendLine(destTable);
             sb.Append("Where Exists(Select 1 from ");
@@ -101,9 +101,9 @@ namespace EntityExtensions.Internal
         }
 
         public static string GetMergeSql(this DbContext context, string srcTable, string destTable, List<string> colNames, List<string> keys,
-            Dictionary<string, bool> computedCols, string keysTable = null, List<string> returnCols = null)
+            Dictionary<string, bool> computedCols, string keysTable = null, ICollection<string> returnCols = null)
         {
-            StringBuilder sb = new StringBuilder();
+            var sb = new StringBuilder();
             var nonComputedCols = colNames.Where(x => !computedCols.ContainsKey(x)).ToList();
             sb.AppendLine($"Merge into {destTable} dest using(select * from {srcTable}) src");
             sb.Append("on (");
@@ -136,7 +136,7 @@ namespace EntityExtensions.Internal
         
         public static string GetTableDdl(this DbContext context, string tableName, IDictionary<string, PropertyInfo> tabCols)
         {
-            StringBuilder sb = new StringBuilder();
+            var sb = new StringBuilder();
             sb.AppendLine($"Create Table {tableName}(");
 
             sb.AppendLine(string.Join(",\r\n",

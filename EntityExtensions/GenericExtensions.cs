@@ -1,9 +1,7 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Data.Entity;
 using System.Linq;
 using EntityExtensions.Internal;
-using EntityExtensions.SqlServer;
 
 namespace EntityExtensions
 {
@@ -31,18 +29,9 @@ namespace EntityExtensions
                 throw new ArgumentOutOfRangeException($"Can't find database column name for property: {propertyName}!");
 
             var tableName = context.GetTableName<T>();
-            string sql = $"Delete from {tableName} where [{columnName}] = @p0";
+            var sql = $"Delete from {tableName} where [{columnName}] = @p0";
 
             context.Database.ExecuteSqlCommand(sql, value);
-
-            var insertsAndupdates = new List<object>();
-            var deletes = new List<object>();
-            context.BulkUpdate(insertsAndupdates, deletes);
-
-            context.DirectDeleteByProperty<Object>("PropertyName", "PropertyValue");
-            context.InsertOrUpdate(new object());
-
-            context.GetTableColumns<object>();
         }
 
         /// <summary>
@@ -56,7 +45,7 @@ namespace EntityExtensions
         public static void InsertOrUpdate<T>(this DbContext context, T entity)
         {
             var columnNames = context.GetPropertyColumnNames<T>();
-            Type type = typeof(T);
+            var type = typeof(T);
             var properties = columnNames.Keys.Select(x => type.GetProperty(x)).ToList();
             var paramList = properties.Select(x => x.GetValue(entity, null)).ToArray();
             var sqlInsertOrUpdate = context.GetInsertOrUpdateSql<T>();
