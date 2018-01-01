@@ -124,7 +124,8 @@ namespace EntityExtensions.Internal
             {
                 sb.AppendLine();
                 sb.Append("output ");
-                sb.Append(string.Join(", ", identityCols.Select(x => $"src.[{x}] [{OldColumnPrefix}{x}]")));
+                //Return the original keys as long as it's part of the requested return columns
+                sb.Append(string.Join(", ", identityCols.Where(keys.Contains).Select(x => $"src.[{x}] [{OldColumnPrefix}{x}]")));
                 sb.Append(",");
                 sb.Append(string.Join(", ", identityCols.Select(x => $"inserted.[{x}]")));
                 sb.Append(" into ");
