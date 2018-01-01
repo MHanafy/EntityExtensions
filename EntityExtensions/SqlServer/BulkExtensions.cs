@@ -7,6 +7,7 @@ using System.Data.SqlClient;
 using System.Linq;
 using System.Reflection;
 using EntityExtensions.Common;
+using EntityExtensions.Helpers;
 using EntityExtensions.Internal;
 
 namespace EntityExtensions.SqlServer
@@ -128,12 +129,14 @@ namespace EntityExtensions.SqlServer
             var outSettings = GetOutputColumns<T>(context, hasInserts, hasUpdates, refreshMode, columns, keys.Keys,
                 computedCols);
 
-
             var bulk = new SqlBulkCopy((SqlConnection) context.Database.Connection);
 
             if (hasInserts || hasUpdates)
             {
-                var table = context.GetDatatable(updates, columns);
+                var allUpdates = new List<T>();
+                if(hasInserts) allUpdates.AddRange(inserts);
+                if(hasUpdates) allUpdates.AddRange(updates);
+
                 var sql = context.GetTableDdl(tmpTableName, columns);
                 //Create a temp table to insert modified/inserted rows.
                 context.Database.ExecuteSqlCommand(sql);
@@ -141,7 +144,11 @@ namespace EntityExtensions.SqlServer
                 if (outSettings != null)
                 {
                     context.Database.ExecuteSqlCommand(outSettings.TableSql);
+                    var identityProps = computedCols.Where(x => x.Value).Select(x => columns[x.Key]).ToList();
+                    SetTempIdentity(inserts, identityProps);
                 }
+
+                var table = context.GetDatatable(allUpdates, columns);
 
                 //Use BulkCopy to bulk insert records to temp table.
                 bulk.DestinationTableName = tmpTableName;
@@ -149,9 +156,16 @@ namespace EntityExtensions.SqlServer
 
                 //Get computed columns because we can't insert/update them
                 sql = context.GetMergeSql(tmpTableName, tableName, columns.Keys.ToList(), keys.Keys.ToList(),
-                    computedCols, outSettings?.TableName, outSettings?.Columns.Keys);
+                    computedCols, outSettings?.TableName, outSettings?.AllColumns.Keys);
 
                 context.Database.ExecuteSqlCommand(sql);
+
+                if (outSettings != null)
+                {
+                    RefreshEntities(context, allUpdates, outSettings);
+                    sql = "drop table " + outSettings.TableName;
+                    context.Database.ExecuteSqlCommand(sql);
+                }
 
                 //drop the temp table
                 sql = "drop table " + tmpTableName;
@@ -184,20 +198,98 @@ namespace EntityExtensions.SqlServer
             }
         }
 
+        private const int IdentitySeed = -100;
+        private const int IdentityIncrement = -1;
+
+        /// <summary>
+        /// Sets unique temporary identity values to enable reading back the actual identities from DB.
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="entities"></param>
+        /// <param name="identityProps"></param>
+        internal static void SetTempIdentity<T>(ICollection<T> entities, ICollection<PropertyInfo> identityProps)
+        {
+            var id = IdentitySeed;
+            foreach (var entity in entities)
+            {
+                foreach (var prop in identityProps)
+                {
+                    if (Convert.ToInt64(prop.GetValue(entity, null)) != 0)
+                    {
+                        continue;
+                    }
+                    prop.SetValue(entity, id, null);
+                    id += IdentityIncrement;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Reads the database generated identity/computed columns.
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="context"></param>
+        /// <param name="entities"></param>
+        /// <param name="outSettings"></param>
+        internal static void RefreshEntities<T>(DbContext context, ICollection<T> entities, OutputColumns outSettings)
+        {
+            //storing values into a dictionary based on keys hash to facilitate fast lookup.
+            var values = new Dictionary<int, object[]>();
+            var command = context.Database.Connection.CreateCommand();
+            command.CommandText = outSettings.SelectSql;
+            using (var reader = command.ExecuteReader())
+            {
+                while (reader.Read())
+                {
+                    // ReSharper disable once AccessToDisposedClosure
+                    var keys = outSettings.Keys.Select(x => reader[SqlHelper.OldColumnPrefix + x.Key]).ToArray();
+                    var vals = new object[outSettings.AllColumns.Count];
+                    var i = 0;
+                    foreach (var col in outSettings.AllColumns.Keys)
+                    {
+                        vals[i] = reader[col];
+                        i++;
+                    }
+                    values.Add(HashHelper.CombineHashCodes(keys), vals);
+                }
+                reader.Close();
+            }
+
+            foreach (var entity in entities)
+            {
+                var key = HashHelper.CombineHashCodes(outSettings.Keys.Select(x => x.Value.GetValue(entity, null)).ToArray());
+                var i = 0;
+                foreach (var prop in outSettings.AllColumns.Values)
+                {
+                    //Values are stored in the object array in the same order as AllColumns, hence it's safe to use the index.
+                    prop.SetValue(entity, values[key][i], null);
+                    i++;
+                }
+            }
+        }
+
         internal class OutputColumns
         {
             public readonly Dictionary<string, PropertyInfo> Keys;
             public readonly Dictionary<string, PropertyInfo> Columns;
+            public readonly Dictionary<string, PropertyInfo> AllColumns;
             public readonly string TableName;
             public readonly string TableSql;
+            public string SelectSql => $"Select * From {TableName}";
 
             public OutputColumns(Dictionary<string, PropertyInfo> keys, Dictionary<string, PropertyInfo> columns,
                 string tableName, string tableSql)
             {
                 Keys = keys;
                 Columns = columns;
-                TableSql = tableSql;
                 TableName = tableName;
+                TableSql = tableSql;
+                AllColumns = new Dictionary<string, PropertyInfo>(keys);
+                if (columns == null) return;
+                foreach (var key in columns.Keys)
+                {
+                    AllColumns.Add(key, columns[key]);
+                }
             }
         }
 
@@ -227,7 +319,7 @@ namespace EntityExtensions.SqlServer
                     if (hasInserts || hasUpdates)
                     {
                         var computedColumns = computedCols.Where(x => !x.Value).Select(x => x.Key).ToList();
-                        if (computedColumns.Count > 0 && keyList !=null && keyList.Count == 0)
+                        if (computedColumns.Count > 0 && keyList != null && keyList.Count == 0)
                         {
                             //If there're only computed columns and no identities, we need to include the primary key to identify the values.
                             keyList = keys.ToList();
@@ -244,19 +336,11 @@ namespace EntityExtensions.SqlServer
             var outKeys = keyList.ToDictionary(x => x, y => columns[y]);
             var outCols = colList?.ToDictionary(x => x, y => columns[y]);
 
-            var allCols = new Dictionary<string, PropertyInfo>(outKeys);
-            if (outCols != null)
-            {
-                foreach (var key in outCols.Keys)
-                {
-                    allCols.Add(key, outCols[key]);
-                }
-            }
-
             var tableName = GetTempTableName<T>() + "OutValues";
-            var tableSql = context.GetTableDdl(tableName, allCols);
+            var tableSql = context.GetOutTableDdl(tableName, outKeys, outCols);
+            var result = new OutputColumns(outKeys, outCols, tableName, tableSql);
 
-            return new OutputColumns(outKeys, outCols, tableName, tableSql);
+            return result;
         }
 
         /// <summary>
@@ -282,18 +366,25 @@ namespace EntityExtensions.SqlServer
             var keyCol = context.GetTableColumns<T>()[keyColName];
             var insertList = new List<T>();
             var newUpdateList = new List<T>();
-            foreach (var item in updateList)
+            if (updateList != null)
             {
-                //Below should be safe, since identity columns are always integers, using 64 to account for large ids.
-                if (Convert.ToInt64(keyCol.GetValue(item, null)) == 0)
+                foreach (var item in updateList)
                 {
-                    //If identity value is 0 it's assumed to be a new record
-                    insertList.Add(item);
+                    //Below should be safe, since identity columns are always integers, using 64 to account for large ids.
+                    if (Convert.ToInt64(keyCol.GetValue(item, null)) == 0)
+                    {
+                        //If identity value is 0 it's assumed to be a new record
+                        insertList.Add(item);
+                    }
+                    else
+                    {
+                        newUpdateList.Add(item);
+                    }
                 }
-                else
-                {
-                    newUpdateList.Add(item);
-                }
+            }
+            else
+            {
+                newUpdateList = null;
             }
             BulkUpdate(context, insertList, newUpdateList, deleteList);
         }

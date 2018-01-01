@@ -48,6 +48,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Common\Enums.cs" />
+    <Compile Include="Helpers\HashHelper.cs" />
     <Compile Include="Internal\Helper.cs" />
     <Compile Include="SqlServer\BulkExtensions.cs" />
     <Compile Include="GenericExtensions.cs" />
