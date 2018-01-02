@@ -351,7 +351,7 @@ namespace EntityExtensions.SqlServer
         /// <param name="context"></param>
         /// <param name="updateList"></param>
         /// <param name="deleteList"></param>
-        [Obsolete("Use the Insert/Update/Delete overload instead!")]
+        [Obsolete("Use the Insert/Update/Delete overload instead! It might cause unexpected issues with identity refresh.")]
         public static void BulkUpdate<T>(this DbContext context, ICollection<T> updateList, ICollection<T> deleteList)
             where T : class 
         {
