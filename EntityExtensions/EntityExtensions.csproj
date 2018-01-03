@@ -44,7 +44,7 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Common\BulkExtensions.cs" />
+    <Compile Include="Core\BulkExtensions.cs" />
     <Compile Include="Common\Enums.cs" />
     <Compile Include="Common\IBulkProvider.cs" />
     <Compile Include="Helpers\HashHelper.cs" />

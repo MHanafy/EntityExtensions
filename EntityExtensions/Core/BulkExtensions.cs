@@ -5,10 +5,11 @@ using System.Data.Entity;
 using System.Data.Entity.Core;
 using System.Linq;
 using System.Reflection;
+using EntityExtensions.Common;
 using EntityExtensions.Helpers;
 using EntityExtensions.Internal;
 
-namespace EntityExtensions.Common
+namespace EntityExtensions.Core
 {
     /// <summary>
     /// Provides EF bulk processing extensions for SQL Server, utilizing SqlBulkCopy

@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Data.Entity;
 using EntityExtensions.Common;
+using EntityExtensions.Core;
 
 namespace EntityExtensions.SqlServer
 {
@@ -12,7 +13,6 @@ namespace EntityExtensions.SqlServer
     /// </summary>
     public static class BulkExtensions
     {
-
         /// <summary>
         /// Performs a bulk update/insert/delete process for a given list of entities, utilizes EF change tracking to determine the state of entities.
         /// Uses the SqlBulkCopy and temp tables to perform the action.
