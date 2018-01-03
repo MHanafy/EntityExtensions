@@ -71,8 +71,12 @@
     <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\EntityExtensions.SqlServer\EntityExtensions.SqlServer.csproj">
+      <Project>{b76848ce-ba7a-40da-997c-542a3166fe2d}</Project>
+      <Name>EntityExtensions.SqlServer</Name>
+    </ProjectReference>
     <ProjectReference Include="..\EntityExtensions\EntityExtensions.csproj">
-      <Project>{1C82F797-B4F1-4025-B381-1C9E3F690713}</Project>
+      <Project>{1c82f797-b4f1-4025-b381-1c9e3f690713}</Project>
       <Name>EntityExtensions</Name>
     </ProjectReference>
   </ItemGroup>
