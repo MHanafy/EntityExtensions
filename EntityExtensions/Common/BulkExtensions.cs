@@ -3,14 +3,12 @@ using System.Collections.Generic;
 using System.Data;
 using System.Data.Entity;
 using System.Data.Entity.Core;
-using System.Data.SqlClient;
 using System.Linq;
 using System.Reflection;
-using EntityExtensions.Common;
 using EntityExtensions.Helpers;
 using EntityExtensions.Internal;
 
-namespace EntityExtensions.SqlServer
+namespace EntityExtensions.Common
 {
     /// <summary>
     /// Provides EF bulk processing extensions for SQL Server, utilizing SqlBulkCopy
@@ -35,9 +33,10 @@ namespace EntityExtensions.SqlServer
         /// </summary>
         /// <typeparam name="T"></typeparam>
         /// <param name="context"></param>
+        /// <param name="bulkProvider">The bulk provider to use for direct DB insertion</param>
         /// <param name="entities">The list of entities to update</param>
         /// <param name="refreshMode">Controls which values are read back from DB, Can't be None</param>
-        public static void BulkUpdate<T>(this DbContext context, ICollection<T> entities, RefreshMode refreshMode = RefreshMode.All)
+        public static void BulkUpdate<T>(this DbContext context, IBulkProvider bulkProvider, ICollection<T> entities, RefreshMode refreshMode = RefreshMode.All)
             where T : class
         {
             if (!context.Configuration.AutoDetectChangesEnabled)
@@ -70,7 +69,7 @@ namespace EntityExtensions.SqlServer
                 }
             }
 
-            BulkUpdate(context, insertList, updateList, deleteList, refreshMode);
+            BulkUpdate(context, bulkProvider, insertList, updateList, deleteList, refreshMode);
 
             //Update entries state
             foreach (var entity in updateList)
@@ -89,15 +88,15 @@ namespace EntityExtensions.SqlServer
         /// </summary>
         /// <typeparam name="T"></typeparam>
         /// <param name="context"></param>
+        /// <param name="bulkProvider"></param>
         /// <param name="inserts">The list of entities to insert</param>
         /// <param name="updates">The list of entities to update</param>
         /// <param name="deletes">The list of entities to delete</param>
         /// <param name="refreshMode">Controls which values are read back from DB</param>
-        public static void BulkUpdate<T>(this DbContext context, ICollection<T> inserts, ICollection<T> updates,
+        public static void BulkUpdate<T>(this DbContext context, IBulkProvider bulkProvider, ICollection<T> inserts, ICollection<T> updates,
             ICollection<T> deletes, RefreshMode refreshMode = RefreshMode.None)
             where T : class
         {
-            //Todo: write code to refresh identity columns
             /*
              * 1. Create temp table for sql bulk update (inserts/updates)
              * 2. Bulk insert
@@ -112,11 +111,6 @@ namespace EntityExtensions.SqlServer
             var tableName = context.GetTableName<T>();
             var keys = context.GetTableKeyColumns<T>();
 
-            if (!(context.Database.Connection is SqlConnection))
-            {
-                throw new NotSupportedException("Only SQL Server connections are supported!");
-            }
-
             var hasInserts = inserts != null && inserts.Count > 0;
             var hasUpdates = updates != null && updates.Count > 0;
 
@@ -129,13 +123,11 @@ namespace EntityExtensions.SqlServer
             var outSettings = GetOutputColumns<T>(context, hasInserts, hasUpdates, refreshMode, columns, keys.Keys,
                 computedCols);
 
-            var bulk = new SqlBulkCopy((SqlConnection) context.Database.Connection);
-
             if (hasInserts || hasUpdates)
             {
                 var allUpdates = new List<T>();
-                if(hasInserts) allUpdates.AddRange(inserts);
-                if(hasUpdates) allUpdates.AddRange(updates);
+                if (hasInserts) allUpdates.AddRange(inserts);
+                if (hasUpdates) allUpdates.AddRange(updates);
 
                 var sql = context.GetTableDdl(tmpTableName, columns);
                 //Create a temp table to insert modified/inserted rows.
@@ -151,8 +143,7 @@ namespace EntityExtensions.SqlServer
                 var table = context.GetDatatable(allUpdates, columns);
 
                 //Use BulkCopy to bulk insert records to temp table.
-                bulk.DestinationTableName = tmpTableName;
-                bulk.WriteToServer(table);
+                bulkProvider.WriteToServer(context.Database.Connection, tmpTableName, table);
 
                 //Get computed columns because we can't insert/update them
                 sql = context.GetMergeSql(tmpTableName, tableName, columns.Keys.ToList(), keys.Keys.ToList(),
@@ -180,8 +171,7 @@ namespace EntityExtensions.SqlServer
                 context.Database.ExecuteSqlCommand(sql);
 
                 var table = context.GetDatatable(deletes, keys);
-                bulk.DestinationTableName = tmpDeleteTableName;
-                bulk.WriteToServer(table);
+                bulkProvider.WriteToServer(context.Database.Connection, tmpDeleteTableName, table);
 
                 sql = context.GetDeleteSql(tmpDeleteTableName, tableName, keys.Keys.ToList());
 
@@ -344,23 +334,24 @@ namespace EntityExtensions.SqlServer
         }
 
         /// <summary>
-        /// Performs a bulk update/insert/delete process for a given list of entities, Takes in an update/insert list and a delete list.
-        /// Uses the SqlBulkCopy and temp tables to perform the action.
+        /// Performs a bulk update/insert/delete process for a given list of entities, Takes in a combined update/insert list and a delete list.
+        /// <para/>
+        /// Infers inserts based on identity values (equals zero), Use the Inserts/Updates/Deletes overload if you already have separate lists.
         /// </summary>
         /// <typeparam name="T"></typeparam>
         /// <param name="context"></param>
+        /// <param name="bulkProvider">The bulk provider to use for direct DB insertion</param>
         /// <param name="updateList"></param>
         /// <param name="deleteList"></param>
-        [Obsolete("Use the Insert/Update/Delete overload instead! It might cause unexpected issues with identity refresh.")]
-        public static void BulkUpdate<T>(this DbContext context, ICollection<T> updateList, ICollection<T> deleteList)
-            where T : class 
+        public static void BulkUpdate<T>(this DbContext context, IBulkProvider bulkProvider, ICollection<T> updateList, ICollection<T> deleteList)
+            where T : class
         {
             //split updateList to insert/update based on identity key value to maintain backward compability
             var keyColName = context.GetComputedColumnNames<T>().First(x => x.Value).Key;
-            if (keyColName==null)
+            if (keyColName == null)
             {
-                //There're no identit columns, hence can't infer entities state.
-                BulkUpdate(context, null, updateList, deleteList);
+                //There're no identity columns, hence can't infer entities state.
+                BulkUpdate(context, bulkProvider, null, updateList, deleteList);
                 return;
             }
             var keyCol = context.GetTableColumns<T>()[keyColName];
@@ -386,7 +377,7 @@ namespace EntityExtensions.SqlServer
             {
                 newUpdateList = null;
             }
-            BulkUpdate(context, insertList, newUpdateList, deleteList);
+            BulkUpdate(context, bulkProvider, insertList, newUpdateList, deleteList);
         }
     }
 }
