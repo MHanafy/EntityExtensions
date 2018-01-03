@@ -8,6 +8,27 @@ namespace EntityExtensions.Internal
 {
     internal static class Helper
     {
+        internal static bool IsNumeric(this object o)
+        {
+            switch (Type.GetTypeCode(o.GetType()))
+            {
+                case TypeCode.Byte:
+                case TypeCode.SByte:
+                case TypeCode.UInt16:
+                case TypeCode.UInt32:
+                case TypeCode.UInt64:
+                case TypeCode.Int16:
+                case TypeCode.Int32:
+                case TypeCode.Int64:
+                case TypeCode.Decimal:
+                case TypeCode.Double:
+                case TypeCode.Single:
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
         internal static string GetSqlServerType(Type type)
         {
             if (type.IsGenericType)
@@ -52,7 +73,7 @@ namespace EntityExtensions.Internal
         {
             if (tabCols == null) tabCols = context.GetTableColumns<T>();
             var table = new DataTable();
-            foreach (string colName in tabCols.Keys)
+            foreach (var colName in tabCols.Keys)
             {
                 var colType = tabCols[colName].PropertyType.IsGenericType
                     ? tabCols[colName].PropertyType.GetGenericArguments()[0]
@@ -63,9 +84,9 @@ namespace EntityExtensions.Internal
             foreach (var entity in entities)
             {
                 var row = table.NewRow();
-                foreach (string column in tabCols.Keys)
+                foreach (var column in tabCols.Keys)
                 {
-                    row[column] = tabCols[column].GetValue(entity, null);
+                    row[column] = tabCols[column].GetValue(entity, null)??DBNull.Value;
                 }
                 table.Rows.Add(row);
             }
