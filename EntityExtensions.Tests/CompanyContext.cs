@@ -6,5 +6,6 @@ namespace EntityExtensions.Tests
     {
         public CompanyContext(): base("Company") { }
         public DbSet<Employee> Employees { get; set; }
+        public DbSet<EmpNoId> EmpsNoIds { get; set; }
     }
 }
