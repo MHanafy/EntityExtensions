@@ -8,7 +8,7 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 namespace EntityExtensions.Tests
 {
     [TestClass]
-    public class IntegrationTests
+    public class SingleIdentityTests
     {
 
         [TestMethod]
