@@ -10,7 +10,11 @@
     <!-- <iconUrl>http://ICON_URL_HERE_OR_DELETE_THIS_LINE</iconUrl> -->
     <requireLicenseAcceptance>false</requireLicenseAcceptance>
     <description>Entity Framework extenstions library (Bulk processing and Meta helpers)</description>
-    <releaseNotes>Initial release: Single table bulk update/insert/delete.</releaseNotes>
+    <releaseNotes>This release brings the ability of reading database generated values (Identity and calculated columns) after performing the bulk update.
+    BulkUpdate now supports a new parameter that controls what's read back from DB to allow finer control of performance.
+    Along with that, comes code reorganization to extract vendor specific code to a separate Dll, in a step to pave the road for additional vendors without compelling users to reference unnecessary Dlls that they don't use.
+    The code is fully backward compatible, So you code doesn't need to change after the upgrade.
+    </releaseNotes>
     <copyright>Copyright 2017</copyright>
     <tags>EntityFrameWork Bulk Extension EF Insert Update Delete BulkCopy Entity</tags>
   </metadata>
