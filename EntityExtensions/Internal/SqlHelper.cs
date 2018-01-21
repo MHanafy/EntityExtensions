@@ -1,6 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Data;
+﻿using System.Collections.Generic;
 using System.Data.Entity;
 using System.Linq;
 using System.Reflection;
@@ -13,6 +11,8 @@ namespace EntityExtensions.Internal
     /// </summary>
     internal static class SqlHelper
     {
+
+        public const string OldColumnPrefix = "Old_";
 
         /// <summary>
         /// Returns a merge SQL statement that either inserts or updates an entity based on the primary key.
@@ -89,7 +89,7 @@ namespace EntityExtensions.Internal
 
         public static string GetDeleteSql(this DbContext context, string srcTable, string destTable, List<string> keys)
         {
-            StringBuilder sb = new StringBuilder();
+            var sb = new StringBuilder();
             sb.Append("Delete from ");
             sb.AppendLine(destTable);
             sb.Append("Where Exists(Select 1 from ");
@@ -101,9 +101,9 @@ namespace EntityExtensions.Internal
         }
 
         public static string GetMergeSql(this DbContext context, string srcTable, string destTable, List<string> colNames, List<string> keys,
-            Dictionary<string, bool> computedCols, string keysTable = null, List<string> returnCols = null)
+            Dictionary<string, bool> computedCols, string keysTable = null, ICollection<string> returnCols = null)
         {
-            StringBuilder sb = new StringBuilder();
+            var sb = new StringBuilder();
             var nonComputedCols = colNames.Where(x => !computedCols.ContainsKey(x)).ToList();
             sb.AppendLine($"Merge into {destTable} dest using(select * from {srcTable}) src");
             sb.Append("on (");
@@ -124,7 +124,8 @@ namespace EntityExtensions.Internal
             {
                 sb.AppendLine();
                 sb.Append("output ");
-                sb.Append(string.Join(", ", identityCols.Select(x => $"src.[{x}]")));
+                //Return the original keys as long as it's part of the requested return columns
+                sb.Append(string.Join(", ", identityCols.Where(keys.Contains).Select(x => $"src.[{x}] [{OldColumnPrefix}{x}]")));
                 sb.Append(",");
                 sb.Append(string.Join(", ", identityCols.Select(x => $"inserted.[{x}]")));
                 sb.Append(" into ");
@@ -133,10 +134,37 @@ namespace EntityExtensions.Internal
             sb.Append(";");
             return sb.ToString();
         }
-        
+
+        /// <summary>
+        /// Returns a table Ddl that contains old and new Keys, used for supporting reading identity/calculated columns
+        /// </summary>
+        /// <param name="context"></param>
+        /// <param name="tableName"></param>
+        /// <param name="keys"></param>
+        /// <param name="columns"></param>
+        /// <returns></returns>
+        public static string GetOutTableDdl(this DbContext context, string tableName,
+            IDictionary<string, PropertyInfo> keys, IDictionary<string, PropertyInfo> columns)
+        {
+            var allColumns = keys.ToDictionary(x => OldColumnPrefix + x.Key, y => y.Value);
+            foreach (var key in keys)
+            {
+                allColumns.Add(key.Key, key.Value);    
+            }
+            if (columns != null)
+            {
+                foreach (var column in columns)
+                {
+                    allColumns.Add(column.Key, column.Value);
+                }
+            }
+            return GetTableDdl(context, tableName, allColumns);
+        }
+
+
         public static string GetTableDdl(this DbContext context, string tableName, IDictionary<string, PropertyInfo> tabCols)
         {
-            StringBuilder sb = new StringBuilder();
+            var sb = new StringBuilder();
             sb.AppendLine($"Create Table {tableName}(");
 
             sb.AppendLine(string.Join(",\r\n",

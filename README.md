@@ -8,7 +8,7 @@ Initially, the project only supports bulk inserts/update/delete to SQL server, u
 
 The plan is, to keep updating it with other vendors support (Oracle, MySql, etc...) if it gets enough demand/contribution from the community.
 
-Using the library is as easy as adding a using statement for EntityExtensions; then using the extension methods from you DbContext.
+Using the library is as easy as adding a using statement for EntityExtensions; then using the extension methods from your DbContext.
 
 Examples:
 Bulk insert/updates/deletes
